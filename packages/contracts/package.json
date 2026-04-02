@@ -15,6 +15,6 @@
     "class-validator": "^0.14.1"
   },
   "devDependencies": {
-    "typescript": "^5.7.2"
+    "typescript": "^6.0.2"
   }
 }
