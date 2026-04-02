@@ -46,6 +46,8 @@ describe('API Gateway E2E', () => {
   });
 
   afterEach(() => {
+    const pendingMocks = nock.pendingMocks();
+    expect(pendingMocks).toEqual([]);
     nock.cleanAll();
     nock.enableNetConnect();
   });
