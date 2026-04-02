@@ -1,0 +1,158 @@
+// Catalog Service — owns device catalog, tariffs, channels, terms, VAS
+// This is the reference data source used by cycle-service, headline-service, etc.
+// Data mirrors the existing production DDE src_ / cfg_ tables.
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("CATALOG_DB_URL")
+}
+
+// ── Channels ─────────────────────────────────────────────────────────────────
+// ChannelId codes must match ChannelId enum in @dde/contracts
+
+model Channel {
+  id        String   @id @default(uuid())
+  code      Int      @unique // 0=GENERIC, 1=DIRECT, 2=D&F, 3=NATIONAL_CHAINS, 4=ONLINE, 5=ONYX
+  name      String
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+  updatedAt DateTime @updatedAt
+
+  subChannels SubChannel[]
+
+  @@map("cfg_channels")
+}
+
+model SubChannel {
+  id        String   @id @default(uuid())
+  channelId String
+  channel   Channel  @relation(fields: [channelId], references: [id])
+  name      String
+  code      String   @unique
+  isActive  Boolean  @default(true)
+  createdAt DateTime @default(now())
+
+  @@index([channelId])
+  @@map("cfg_sub_channels")
+}
+
+// ── Contract Terms ────────────────────────────────────────────────────────────
+
+model Term {
+  id          String  @id @default(uuid())
+  months      Int     @unique // 12, 24, 36, 48
+  displayName String
+  isActive    Boolean @default(true)
+
+  @@map("cfg_terms")
+}
+
+// ── Devices ───────────────────────────────────────────────────────────────────
+
+model Device {
+  id          String   @id @default(uuid())
+  // From raw_tradelist.sql: device columns
+  oemCode     String   @unique // supplier/OEM model code
+  model       String
+  colour      String?
+  storageGb   Int?
+  category    String? // smartphone, tablet, laptop, etc.
+  handsetCost Decimal  @db.Decimal(10, 2)
+  retailPrice Decimal  @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  deviceBaskets DeviceBasket[]
+
+  @@index([model])
+  @@index([category])
+  @@map("src_devices")
+}
+
+// A basket is an approved set of devices for a given cycle context (used in deal config)
+model DeviceBasket {
+  id        String   @id @default(uuid())
+  cycleId   String // references cycle-service; stored by foreign key value only
+  deviceId  String
+  device    Device   @relation(fields: [deviceId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([cycleId, deviceId])
+  @@index([cycleId])
+  @@map("enr_device_baskets")
+}
+
+// ── Tariffs ───────────────────────────────────────────────────────────────────
+
+model Tariff {
+  id              String   @id @default(uuid())
+  code            String   @unique
+  name            String
+  type            String // TariffType: VOICE, DATA, HYBRID
+  subType         String? // TariffSubType: RED_FLEXI, RED_MORE, etc.
+  monthlyFee      Decimal  @db.Decimal(10, 2)
+  dataMb          Int? // monthly data allowance in MB (null if unlimited)
+  isUnlimitedData Boolean  @default(false)
+  minutesPerMonth Int?
+  smsPerMonth     Int?
+  isActive        Boolean  @default(true)
+  createdAt       DateTime @default(now())
+  updatedAt       DateTime @updatedAt
+
+  tariffRanges  TariffRange[]
+  tariffBaskets TariffBasket[]
+
+  @@index([type])
+  @@map("src_tariffs")
+}
+
+// Tariff price ranges by channel and term (pricing matrix)
+model TariffRange {
+  id          String   @id @default(uuid())
+  tariffId    String
+  tariff      Tariff   @relation(fields: [tariffId], references: [id], onDelete: Cascade)
+  channelCode Int // references cfg_channels.code
+  termMonths  Int // 12/24/36/48
+  minPrice    Decimal  @db.Decimal(10, 2)
+  maxPrice    Decimal  @db.Decimal(10, 2)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@unique([tariffId, channelCode, termMonths])
+  @@index([tariffId])
+  @@map("cfg_tariff_ranges")
+}
+
+// Tariff basket — approved tariffs for a cycle context
+model TariffBasket {
+  id        String   @id @default(uuid())
+  cycleId   String
+  tariffId  String
+  tariff    Tariff   @relation(fields: [tariffId], references: [id])
+  createdAt DateTime @default(now())
+
+  @@unique([cycleId, tariffId])
+  @@index([cycleId])
+  @@map("enr_tariff_baskets")
+}
+
+// ── Value-Added Services (VAS) ────────────────────────────────────────────────
+
+model Vas {
+  id          String   @id @default(uuid())
+  code        String   @unique
+  name        String
+  description String?
+  monthlyCost Decimal  @db.Decimal(10, 2)
+  isActive    Boolean  @default(true)
+  createdAt   DateTime @default(now())
+  updatedAt   DateTime @updatedAt
+
+  @@map("src_vas")
+}

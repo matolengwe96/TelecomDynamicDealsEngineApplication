@@ -1,0 +1,40 @@
+generator client { provider = "prisma-client-js" }
+
+datasource db {
+  provider = "postgresql"
+  url      = env("APPROVAL_DB_URL")
+}
+
+model ApprovalRequest {
+  id                String    @id @default(uuid())
+  protoHeadlineId   String
+  cycleId           String
+  currentLevel      Int       @default(0)
+  requiredLevel     Int       // 0..3 from efficiency thresholds
+  status            String    @default("PENDING") // PENDING, APPROVED, REJECTED
+  submittedBy       String
+  submittedAt       DateTime  @default(now())
+  completedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  actions           ApprovalAction[]
+
+  @@index([cycleId])
+  @@index([status])
+  @@map("dsh_approval_requests")
+}
+
+model ApprovalAction {
+  id                String    @id @default(uuid())
+  requestId         String
+  request           ApprovalRequest @relation(fields: [requestId], references: [id], onDelete: Cascade)
+  level             Int
+  approverId        String
+  decision          String    // APPROVED / REJECTED
+  comments          String?
+  actedAt           DateTime  @default(now())
+
+  @@index([requestId])
+  @@map("dsh_approval_actions")
+}

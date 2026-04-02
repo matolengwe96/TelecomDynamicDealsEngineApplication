@@ -1,0 +1,40 @@
+generator client { provider = "prisma-client-js" }
+
+datasource db {
+  provider = "postgresql"
+  url      = env("OEM_DB_URL")
+}
+
+model OemNegotiation {
+  id              String    @id @default(uuid())
+  cycleId         String
+  status          String    @default("OPEN") // OPEN, CHANGES_REQUESTED, CONFIRMED
+  initiatedBy     String
+  confirmedBy     String?
+  confirmedAt     DateTime?
+  notes           String?
+  createdAt       DateTime  @default(now())
+  updatedAt       DateTime  @updatedAt
+
+  items           OemNegotiationItem[]
+
+  @@index([cycleId])
+  @@index([status])
+  @@map("enr_oem_negotiations")
+}
+
+model OemNegotiationItem {
+  id              String    @id @default(uuid())
+  negotiationId   String
+  negotiation     OemNegotiation @relation(fields: [negotiationId], references: [id], onDelete: Cascade)
+  deviceId        String
+  deviceModel     String
+  proposedCtd     Decimal   @db.Decimal(10, 2)
+  acceptedCtd     Decimal?  @db.Decimal(10, 2)
+  comments        String?
+  updatedBy       String?
+  updatedAt       DateTime?
+
+  @@index([negotiationId])
+  @@map("enr_oem_negotiation_items")
+}

@@ -1,0 +1,25 @@
+generator client { provider = "prisma-client-js" }
+
+datasource db {
+  provider = "postgresql"
+  url      = env("CHANNEL_DEALS_DB_URL")
+}
+
+model ChannelDeal {
+  id                String    @id @default(uuid())
+  protoHeadlineId   String
+  channelCode       Int
+  termMonths        Int
+  deviceId          String
+  tariffId          String
+  headlineId        String?
+  status            String    @default("READY") // READY, EXPORTED, FAILED
+  dealIdentifier    String?   @unique
+  exportedAt        DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@index([channelCode])
+  @@index([status])
+  @@map("dsh_channel_deals")
+}

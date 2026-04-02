@@ -1,0 +1,165 @@
+// Cycle Service — owns cycles, deal configuration, campaign metadata
+// Business rules source: cbu-business-rules.md
+
+generator client {
+  provider = "prisma-client-js"
+  output   = "../src/generated/prisma"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("CYCLE_DB_URL")
+}
+
+// ── Lookup / config tables ───────────────────────────────────────────────────
+
+model CfgBusinessUnit {
+  id          String   @id @default(uuid())
+  code        String   @unique // CBU, VB, TERMINALS
+  displayName String
+  createdAt   DateTime @default(now())
+
+  cycles Cycle[]
+
+  @@map("cfg_business_units")
+}
+
+// ── Core cycle entity ────────────────────────────────────────────────────────
+
+// A "cycle" represents a commercial period (e.g., "Sep 2024 CBU").
+// Each cycle tracks its status via a finite state machine.
+// Valid transitions are enforced at service level (see CYCLE_STATUS_TRANSITIONS in @dde/contracts).
+
+model Cycle {
+  id             String          @id @default(uuid())
+  name           String
+  businessUnitId String
+  businessUnit   CfgBusinessUnit @relation(fields: [businessUnitId], references: [id])
+  startDate      DateTime
+  endDate        DateTime
+  status         String          @default("DRAFT") // CycleStatus enum values
+  description    String?
+  createdBy      String // user id
+  updatedBy      String?
+  version        Int             @default(1) // optimistic concurrency
+  createdAt      DateTime        @default(now())
+  updatedAt      DateTime        @updatedAt
+
+  statusHistory CycleStatusHistory[]
+  dealConfig    CycleDealConfig?
+  campaigns     Campaign[]
+
+  @@index([businessUnitId])
+  @@index([status])
+  @@index([startDate, endDate])
+  @@map("enr_cycles")
+}
+
+// Immutable log of every status transition for audit
+model CycleStatusHistory {
+  id            String   @id @default(uuid())
+  cycleId       String
+  cycle         Cycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  fromStatus    String
+  toStatus      String
+  changedBy     String // user id
+  reason        String?
+  correlationId String?
+  createdAt     DateTime @default(now())
+
+  @@index([cycleId])
+  @@map("hsh_cycle_status_history")
+}
+
+// ── Deal configuration (submitted once per cycle by CBU) ─────────────────────
+
+// Captures the negotiated deal parameters: approved terms, tariffs, devices, VAS.
+// Triggers the OEM negotiation workflow when submitted.
+
+model CycleDealConfig {
+  id      String @id @default(uuid())
+  cycleId String @unique
+  cycle   Cycle  @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+
+  // Selected terms (comma-separated months: "12,24,36")
+  selectedTerms String[]
+
+  // Agreed CTC (Cost to Company) ceiling in Rands — used in efficiency formula
+  ctcCeiling Decimal @db.Decimal(12, 2)
+
+  // Agreed CTD (Cost to Distributor) ceiling
+  ctdCeiling Decimal @db.Decimal(12, 2)
+
+  notes       String?
+  submittedBy String
+  submittedAt DateTime @default(now())
+
+  // Canonical price components from business rules
+  // CTC = handset_cost + airtime_cost + vas_cost
+  // Efficiency = (CTC - retail_price) / retail_price * 100
+  // Thresholds: >20% = L0 auto-approve; 10-20% = L1; <10% = L2/L3
+
+  tariffBaskets DealConfigTariffBasket[]
+  deviceBaskets DealConfigDeviceBasket[]
+  vasItems      DealConfigVas[]
+
+  @@map("enr_cycle_deal_configs")
+}
+
+model DealConfigTariffBasket {
+  id           String          @id @default(uuid())
+  dealConfigId String
+  dealConfig   CycleDealConfig @relation(fields: [dealConfigId], references: [id], onDelete: Cascade)
+
+  // References catalog-service; stored as snapshot value
+  tariffId   String // catalog-service tariff UUID
+  tariffCode String // snapshot for display
+  monthlyFee Decimal @db.Decimal(10, 2)
+  term       Int // 12/24/36/48
+
+  @@index([dealConfigId])
+  @@map("enr_deal_config_tariff_baskets")
+}
+
+model DealConfigDeviceBasket {
+  id           String          @id @default(uuid())
+  dealConfigId String
+  dealConfig   CycleDealConfig @relation(fields: [dealConfigId], references: [id], onDelete: Cascade)
+
+  deviceId    String // catalog-service device UUID
+  deviceModel String // snapshot
+  handsetCost Decimal @db.Decimal(10, 2)
+  retailPrice Decimal @db.Decimal(10, 2)
+
+  @@index([dealConfigId])
+  @@map("enr_deal_config_device_baskets")
+}
+
+model DealConfigVas {
+  id           String          @id @default(uuid())
+  dealConfigId String
+  dealConfig   CycleDealConfig @relation(fields: [dealConfigId], references: [id], onDelete: Cascade)
+
+  vasId       String // catalog-service VAS UUID
+  vasName     String // snapshot
+  monthlyCost Decimal @db.Decimal(10, 2)
+
+  @@index([dealConfigId])
+  @@map("enr_deal_config_vas")
+}
+
+// ── Campaigns ────────────────────────────────────────────────────────────────
+
+// Optional named groupings within a cycle (e.g. "Black Friday", "Back to School")
+model Campaign {
+  id          String   @id @default(uuid())
+  cycleId     String
+  cycle       Cycle    @relation(fields: [cycleId], references: [id], onDelete: Cascade)
+  name        String
+  description String?
+  createdBy   String
+  createdAt   DateTime @default(now())
+
+  @@index([cycleId])
+  @@map("enr_campaigns")
+}

@@ -1,0 +1,72 @@
+// Trade List Service — manages raw trade list CSV uploads, validation, and commit
+// Prisma schema will be added in Phase 2
+
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("TRADELIST_DB_URL")
+}
+
+// Upload tracking table
+model TradeListUpload {
+  id            String    @id @default(uuid())
+  cycleId       String
+  filename      String
+  status        String    @default("PENDING")   // PENDING, VALIDATING, VALID, INVALID, COMMITTED
+  rowCount      Int       @default(0)
+  errorCount    Int       @default(0)
+  uploadedBy    String
+  committedBy   String?
+  committedAt   DateTime?
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
+
+  rows          TradeListRow[]
+  errors        TradeListValidationError[]
+
+  @@index([cycleId])
+  @@index([status])
+  @@map("src_tradelist_uploads")
+}
+
+// Individual validated rows (mirrors raw_tradelist columns)
+model TradeListRow {
+  id            String    @id @default(uuid())
+  uploadId      String
+  upload        TradeListUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  rowNumber     Int
+  // Raw fields from raw_tradelist.sql
+  cid           String?
+  tradeEx       String?
+  deviceModel   String?
+  tariffCode    String?
+  channelCode   Int?
+  term          Int?
+  retailPrice   Decimal?  @db.Decimal(10, 2)
+  handsetCost   Decimal?  @db.Decimal(10, 2)
+  ctc           Decimal?  @db.Decimal(10, 2)
+  efficiency    Decimal?  @db.Decimal(8, 4)
+  rawData       Json                           // full row as JSON for audit
+  isValid       Boolean   @default(false)
+  createdAt     DateTime  @default(now())
+
+  @@index([uploadId])
+  @@map("src_tradelist_rows")
+}
+
+model TradeListValidationError {
+  id            String    @id @default(uuid())
+  uploadId      String
+  upload        TradeListUpload @relation(fields: [uploadId], references: [id], onDelete: Cascade)
+  rowNumber     Int?
+  field         String?
+  message       String
+  severity      String    @default("ERROR")    // ERROR, WARNING
+  createdAt     DateTime  @default(now())
+
+  @@index([uploadId])
+  @@map("src_tradelist_validation_errors")
+}

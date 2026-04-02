@@ -1,0 +1,15 @@
+{
+  "name": "@dde/config",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shared configuration helpers and service URLs",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "rm -rf dist"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

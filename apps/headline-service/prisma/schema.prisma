@@ -1,0 +1,47 @@
+generator client { provider = "prisma-client-js" }
+
+datasource db {
+  provider = "postgresql"
+  url      = env("HEADLINE_DB_URL")
+}
+
+model ProtoHeadline {
+  id                String    @id @default(uuid())
+  cycleId           String
+  channelCode       Int
+  deviceId          String
+  tariffId          String
+  termMonths        Int
+  ctc               Decimal   @db.Decimal(10, 2)
+  ctd               Decimal   @db.Decimal(10, 2)
+  retailPrice       Decimal   @db.Decimal(10, 2)
+  efficiency        Decimal   @db.Decimal(8, 4)
+  dealSubType       String
+  status            Int       @default(10)  // 10 draft, 15 submitted, 25 approved, 30 rejected, 40 published, 50 loaded, 99 archived
+  approvalLevel     Int       @default(0)
+  generatedBy       String
+  generatedAt       DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  headline          Headline?
+
+  @@index([cycleId])
+  @@index([status])
+  @@map("dsh_proto_headlines")
+}
+
+model Headline {
+  id                String    @id @default(uuid())
+  protoHeadlineId   String    @unique
+  protoHeadline     ProtoHeadline @relation(fields: [protoHeadlineId], references: [id], onDelete: Cascade)
+  title             String
+  subtitle          String?
+  body              String?
+  legalCopy         String?
+  channelCode       Int
+  publishedAt       DateTime?
+  createdAt         DateTime  @default(now())
+  updatedAt         DateTime  @updatedAt
+
+  @@map("dsh_headlines")
+}

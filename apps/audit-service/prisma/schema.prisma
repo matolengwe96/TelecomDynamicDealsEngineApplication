@@ -1,0 +1,24 @@
+generator client { provider = "prisma-client-js" }
+
+datasource db {
+  provider = "postgresql"
+  url      = env("AUDIT_DB_URL")
+}
+
+model AuditEvent {
+  id              String    @id @default(uuid())
+  eventName       String
+  eventId         String?
+  correlationId   String?
+  actorId         String?
+  actorEmail      String?
+  entityType      String?
+  entityId        String?
+  payload         Json?
+  createdAt       DateTime  @default(now())
+
+  @@index([eventName])
+  @@index([correlationId])
+  @@index([entityType, entityId])
+  @@map("hsh_audit_events")
+}

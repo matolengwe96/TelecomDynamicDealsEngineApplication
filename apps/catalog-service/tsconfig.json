@@ -1,0 +1,19 @@
+{
+  "extends": "../../tsconfig.base.json",
+  "compilerOptions": {
+    "module": "commonjs",
+    "emitDecoratorMetadata": true,
+    "experimentalDecorators": true,
+    "target": "ES2022",
+    "strictPropertyInitialization": false,
+    "outDir": "dist",
+    "baseUrl": "./",
+    "paths": {
+      "@dde/contracts": ["../../packages/contracts/src"],
+      "@dde/events": ["../../packages/events/src"],
+      "@dde/config": ["../../packages/config/src"]
+    }
+  },
+  "include": ["src/**/*", "prisma/seed.ts"],
+  "exclude": ["node_modules", "dist"]
+}

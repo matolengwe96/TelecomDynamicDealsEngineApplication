@@ -1,0 +1,20 @@
+{
+  "name": "@dde/contracts",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Shared HTTP contracts — DTOs, enums, response types",
+  "main": "dist/index.js",
+  "types": "dist/index.d.ts",
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "lint": "eslint src --ext .ts",
+    "clean": "rm -rf dist"
+  },
+  "dependencies": {
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.14.1"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.2"
+  }
+}

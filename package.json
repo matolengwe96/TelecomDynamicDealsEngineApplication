@@ -1,0 +1,47 @@
+{
+  "name": "dde-enterprise",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Deals Data Engine Enterprise Platform",
+  "workspaces": [
+    "apps/*",
+    "packages/*"
+  ],
+  "scripts": {
+    "dev": "turbo run dev",
+    "dev:gateway": "turbo run dev --filter=@dde/api-gateway",
+    "dev:auth": "turbo run dev --filter=@dde/auth-service",
+    "dev:cycle": "turbo run dev --filter=@dde/cycle-service",
+    "dev:catalog": "turbo run dev --filter=@dde/catalog-service",
+    "dev:web": "turbo run dev --filter=@dde/web",
+    "build": "turbo run build",
+    "test": "turbo run test",
+    "lint": "turbo run lint",
+    "db:migrate:all": "turbo run db:migrate",
+    "db:migrate:auth": "turbo run db:migrate --filter=@dde/auth-service",
+    "db:migrate:cycle": "turbo run db:migrate --filter=@dde/cycle-service",
+    "db:migrate:catalog": "turbo run db:migrate --filter=@dde/catalog-service",
+    "infra:up": "docker-compose -f infra/compose/docker-compose.yml up -d",
+    "infra:down": "docker-compose -f infra/compose/docker-compose.yml down",
+    "infra:logs": "docker-compose -f infra/compose/docker-compose.yml logs -f",
+    "dev:local:auth-gateway": "powershell -ExecutionPolicy Bypass -File ./scripts/start-local-auth-gateway.ps1",
+    "dev:local:auth-gateway:stop": "powershell -ExecutionPolicy Bypass -File ./scripts/stop-local-auth-gateway.ps1",
+    "dev:local:auth-gateway:logs": "powershell -ExecutionPolicy Bypass -File ./scripts/tail-local-auth-gateway-logs.ps1",
+    "dev:local:auth-gateway:smoke": "powershell -ExecutionPolicy Bypass -File ./scripts/smoke-local-auth-gateway.ps1",
+    "dev:local:core": "powershell -ExecutionPolicy Bypass -File ./scripts/start-local-core-services.ps1",
+    "dev:local:core:stop": "powershell -ExecutionPolicy Bypass -File ./scripts/stop-local-core-services.ps1",
+    "dev:local:core:smoke": "powershell -ExecutionPolicy Bypass -File ./scripts/smoke-local-core-services.ps1",
+    "clean": "turbo run clean"
+  },
+  "devDependencies": {
+    "turbo": "^2.3.3",
+    "typescript": "^5.7.2",
+    "prettier": "^3.4.2",
+    "@types/node": "^22.10.7"
+  },
+  "engines": {
+    "node": ">=20.0.0",
+    "pnpm": ">=9.0.0"
+  },
+  "packageManager": "pnpm@9.15.4"
+}

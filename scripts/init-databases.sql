@@ -1,0 +1,11 @@
+CREATE DATABASE dde_auth;
+CREATE DATABASE dde_cycle;
+CREATE DATABASE dde_catalog;
+CREATE DATABASE dde_tradelist;
+CREATE DATABASE dde_oem;
+CREATE DATABASE dde_headline;
+CREATE DATABASE dde_approval;
+CREATE DATABASE dde_channel_deals;
+CREATE DATABASE dde_job;
+CREATE DATABASE dde_notification;
+CREATE DATABASE dde_audit;

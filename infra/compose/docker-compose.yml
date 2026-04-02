@@ -1,0 +1,332 @@
+version: '3.9'
+
+name: dde-enterprise-rebuild
+
+services:
+  postgres:
+    image: postgres:16-alpine
+    container_name: dde-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: dde_user
+      POSTGRES_PASSWORD: dde_pass
+      POSTGRES_DB: postgres
+    ports:
+      - '5432:5432'
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+      - ../../scripts/init-databases.sql:/docker-entrypoint-initdb.d/init-databases.sql:ro
+    healthcheck:
+      test: ['CMD-SHELL', 'pg_isready -U dde_user -d postgres']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  rabbitmq:
+    image: rabbitmq:3.13-management
+    container_name: dde-rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: dde_user
+      RABBITMQ_DEFAULT_PASS: dde_pass
+    ports:
+      - '5672:5672'
+      - '15672:15672'
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', 'check_running']
+      interval: 10s
+      timeout: 5s
+      retries: 10
+
+  redis:
+    image: redis:7-alpine
+    container_name: dde-redis
+    restart: unless-stopped
+    ports:
+      - '6379:6379'
+    healthcheck:
+      test: ['CMD', 'redis-cli', 'ping']
+      interval: 10s
+      timeout: 3s
+      retries: 10
+
+  api-gateway:
+    image: node:20-alpine
+    container_name: dde-api-gateway
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install && pnpm --filter @dde/api-gateway dev"
+    volumes:
+      - ../../:/workspace
+    environment:
+      NODE_ENV: development
+      PORT: 3000
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-dev}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-internal-dev-secret}
+      AUTH_SERVICE_URL: http://auth-service:3001
+      CYCLE_SERVICE_URL: http://cycle-service:3002
+      CATALOG_SERVICE_URL: http://catalog-service:3003
+      TRADELIST_SERVICE_URL: http://tradelist-service:3004
+      OEM_SERVICE_URL: http://oem-negotiation-service:3005
+      HEADLINE_SERVICE_URL: http://headline-service:3006
+      APPROVAL_SERVICE_URL: http://approval-service:3007
+      CHANNEL_DEALS_SERVICE_URL: http://channel-deals-service:3008
+      JOB_SERVICE_URL: http://job-service:3009
+      NOTIFICATION_SERVICE_URL: http://notification-service:3010
+      AUDIT_SERVICE_URL: http://audit-service:3011
+    ports:
+      - '3000:3000'
+    depends_on:
+      auth-service:
+        condition: service_started
+      cycle-service:
+        condition: service_started
+      catalog-service:
+        condition: service_started
+    profiles: ['core']
+
+  auth-service:
+    image: node:20-alpine
+    container_name: dde-auth-service
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install && pnpm --filter @dde/auth-service db:generate && pnpm --filter @dde/auth-service dev"
+    volumes:
+      - ../../:/workspace
+    environment:
+      NODE_ENV: development
+      PORT: 3001
+      AUTH_DB_URL: postgresql://dde_user:dde_pass@postgres:5432/dde_auth?schema=public
+      RABBITMQ_URL: amqp://dde_user:dde_pass@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-dev}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-internal-dev-secret}
+    ports:
+      - '3001:3001'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    profiles: ['core']
+
+  cycle-service:
+    image: node:20-alpine
+    container_name: dde-cycle-service
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install && pnpm --filter @dde/cycle-service db:generate && pnpm --filter @dde/cycle-service dev"
+    volumes:
+      - ../../:/workspace
+    environment:
+      NODE_ENV: development
+      PORT: 3002
+      CYCLE_DB_URL: postgresql://dde_user:dde_pass@postgres:5432/dde_cycle?schema=public
+      RABBITMQ_URL: amqp://dde_user:dde_pass@rabbitmq:5672
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-dev}
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-internal-dev-secret}
+    ports:
+      - '3002:3002'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    profiles: ['core']
+
+  catalog-service:
+    image: node:20-alpine
+    container_name: dde-catalog-service
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install && pnpm --filter @dde/catalog-service db:generate && pnpm --filter @dde/catalog-service dev"
+    volumes:
+      - ../../:/workspace
+    environment:
+      NODE_ENV: development
+      PORT: 3003
+      CATALOG_DB_URL: postgresql://dde_user:dde_pass@postgres:5432/dde_catalog?schema=public
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-internal-dev-secret}
+    ports:
+      - '3003:3003'
+    depends_on:
+      postgres:
+        condition: service_healthy
+    profiles: ['core']
+
+  tradelist-service:
+    image: node:20-alpine
+    container_name: dde-tradelist-service
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install && pnpm --filter @dde/tradelist-service db:generate && pnpm --filter @dde/tradelist-service dev"
+    volumes:
+      - ../../:/workspace
+    environment:
+      NODE_ENV: development
+      PORT: 3004
+      TRADELIST_DB_URL: postgresql://dde_user:dde_pass@postgres:5432/dde_tradelist?schema=public
+      RABBITMQ_URL: amqp://dde_user:dde_pass@rabbitmq:5672
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-internal-dev-secret}
+    ports:
+      - '3004:3004'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    profiles: ['extended']
+
+  oem-negotiation-service:
+    image: node:20-alpine
+    container_name: dde-oem-service
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install && pnpm --filter @dde/oem-negotiation-service db:generate && pnpm --filter @dde/oem-negotiation-service dev"
+    volumes:
+      - ../../:/workspace
+    environment:
+      NODE_ENV: development
+      PORT: 3005
+      OEM_DB_URL: postgresql://dde_user:dde_pass@postgres:5432/dde_oem?schema=public
+      RABBITMQ_URL: amqp://dde_user:dde_pass@rabbitmq:5672
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-internal-dev-secret}
+    ports:
+      - '3005:3005'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    profiles: ['extended']
+
+  headline-service:
+    image: node:20-alpine
+    container_name: dde-headline-service
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install && pnpm --filter @dde/headline-service db:generate && pnpm --filter @dde/headline-service dev"
+    volumes:
+      - ../../:/workspace
+    environment:
+      NODE_ENV: development
+      PORT: 3006
+      HEADLINE_DB_URL: postgresql://dde_user:dde_pass@postgres:5432/dde_headline?schema=public
+      RABBITMQ_URL: amqp://dde_user:dde_pass@rabbitmq:5672
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-internal-dev-secret}
+    ports:
+      - '3006:3006'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    profiles: ['extended']
+
+  approval-service:
+    image: node:20-alpine
+    container_name: dde-approval-service
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install && pnpm --filter @dde/approval-service db:generate && pnpm --filter @dde/approval-service dev"
+    volumes:
+      - ../../:/workspace
+    environment:
+      NODE_ENV: development
+      PORT: 3007
+      APPROVAL_DB_URL: postgresql://dde_user:dde_pass@postgres:5432/dde_approval?schema=public
+      RABBITMQ_URL: amqp://dde_user:dde_pass@rabbitmq:5672
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-internal-dev-secret}
+    ports:
+      - '3007:3007'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    profiles: ['extended']
+
+  channel-deals-service:
+    image: node:20-alpine
+    container_name: dde-channel-deals-service
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install && pnpm --filter @dde/channel-deals-service db:generate && pnpm --filter @dde/channel-deals-service dev"
+    volumes:
+      - ../../:/workspace
+    environment:
+      NODE_ENV: development
+      PORT: 3008
+      CHANNEL_DEALS_DB_URL: postgresql://dde_user:dde_pass@postgres:5432/dde_channel_deals?schema=public
+      RABBITMQ_URL: amqp://dde_user:dde_pass@rabbitmq:5672
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-internal-dev-secret}
+    ports:
+      - '3008:3008'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    profiles: ['extended']
+
+  job-service:
+    image: node:20-alpine
+    container_name: dde-job-service
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install && pnpm --filter @dde/job-service db:generate && pnpm --filter @dde/job-service dev"
+    volumes:
+      - ../../:/workspace
+    environment:
+      NODE_ENV: development
+      PORT: 3009
+      JOB_DB_URL: postgresql://dde_user:dde_pass@postgres:5432/dde_job?schema=public
+      RABBITMQ_URL: amqp://dde_user:dde_pass@rabbitmq:5672
+      REDIS_URL: redis://redis:6379
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-internal-dev-secret}
+    ports:
+      - '3009:3009'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    profiles: ['extended']
+
+  notification-service:
+    image: node:20-alpine
+    container_name: dde-notification-service
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install && pnpm --filter @dde/notification-service db:generate && pnpm --filter @dde/notification-service dev"
+    volumes:
+      - ../../:/workspace
+    environment:
+      NODE_ENV: development
+      PORT: 3010
+      NOTIFICATION_DB_URL: postgresql://dde_user:dde_pass@postgres:5432/dde_notification?schema=public
+      RABBITMQ_URL: amqp://dde_user:dde_pass@rabbitmq:5672
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-internal-dev-secret}
+    ports:
+      - '3010:3010'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    profiles: ['extended']
+
+  audit-service:
+    image: node:20-alpine
+    container_name: dde-audit-service
+    working_dir: /workspace
+    command: sh -c "corepack enable && pnpm install && pnpm --filter @dde/audit-service db:generate && pnpm --filter @dde/audit-service dev"
+    volumes:
+      - ../../:/workspace
+    environment:
+      NODE_ENV: development
+      PORT: 3011
+      AUDIT_DB_URL: postgresql://dde_user:dde_pass@postgres:5432/dde_audit?schema=public
+      RABBITMQ_URL: amqp://dde_user:dde_pass@rabbitmq:5672
+      INTERNAL_SECRET: ${INTERNAL_SECRET:-internal-dev-secret}
+    ports:
+      - '3011:3011'
+    depends_on:
+      postgres:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+    profiles: ['extended']
+
+volumes:
+  postgres_data:
