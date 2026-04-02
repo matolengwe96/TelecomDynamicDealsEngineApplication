@@ -78,6 +78,21 @@ $web.StatusCode
 - Optional monorepo-wide strictness hardening beyond gateway-only scope.
 - Optional README alignment to emphasize `docker compose` over legacy `docker-compose` wording.
 
+## Gateway Test Commands (Verified)
+
+From repository root:
+
+```bash
+# E2E (recommended for gateway validation)
+pnpm test:gateway:e2e
+
+# Unit tests (currently allowed to pass when no unit specs exist)
+pnpm test:gateway
+
+# Unit + E2E together
+pnpm test:gateway:all
+```
+
 ## Rollback Notes
 
 If web fails to start with missing `vite` in container, confirm:
