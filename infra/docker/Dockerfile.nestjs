@@ -1,0 +1,72 @@
+# Shared Dockerfile for all DDE NestJS microservices.
+# Build with:  docker build --build-arg APP_NAME=auth-service --build-arg APP_PORT=3011 ...
+#
+# All services share identical build steps — copy workspace root, packages, then the
+# target app; install deps; build shared packages; (optionally) generate Prisma client;
+# then run `nest build` and start with `node dist/main`.
+
+FROM node:20-alpine AS builder
+
+ARG APP_NAME
+ARG APP_PORT=3000
+ENV APP_NAME=${APP_NAME}
+
+RUN npm install -g pnpm @nestjs/cli
+
+WORKDIR /app
+
+# ── Copy workspace skeleton ───────────────────────────────────────────────────
+COPY package.json pnpm-workspace.yaml pnpm-lock.yaml* tsconfig.base.json .npmrc ./
+COPY packages/ ./packages/
+COPY apps/${APP_NAME}/ ./apps/${APP_NAME}/
+
+# ── Install all workspace deps ────────────────────────────────────────────────
+RUN pnpm install --frozen-lockfile --prod=false
+
+# ── Build shared packages ─────────────────────────────────────────────────────
+RUN pnpm --filter @dde/contracts build
+RUN pnpm --filter @dde/config build
+RUN pnpm --filter @dde/events build
+
+# ── Prisma client generation (no-op if no schema) ────────────────────────────
+WORKDIR /app/apps/${APP_NAME}
+RUN test -f prisma/schema.prisma && npx prisma generate --schema=prisma/schema.prisma || true
+
+# ── Ensure nest-cli.json is present with correct sourceRoot ──────────────────
+RUN test -f nest-cli.json || printf '{"$schema":"https://json.schemastore.org/nest-cli","collection":"@nestjs/schematics","sourceRoot":"src","compilerOptions":{"deleteOutDir":true}}' > nest-cli.json
+
+# ── Build the service ─────────────────────────────────────────────────────────
+RUN nest build
+
+# ── Runtime image (slim) ──────────────────────────────────────────────────────
+FROM node:20-alpine AS runtime
+
+ARG APP_NAME
+ARG APP_PORT=3000
+ENV APP_NAME=${APP_NAME}
+ENV NODE_ENV=production
+
+RUN npm install -g pnpm
+
+WORKDIR /app
+
+# Copy only what is needed at runtime
+COPY --from=builder /app/package.json ./
+COPY --from=builder /app/pnpm-workspace.yaml ./
+COPY --from=builder /app/pnpm-lock.yaml* ./
+COPY --from=builder /app/.npmrc ./
+COPY --from=builder /app/packages/ ./packages/
+COPY --from=builder /app/apps/${APP_NAME}/package.json ./apps/${APP_NAME}/
+COPY --from=builder /app/apps/${APP_NAME}/dist/ ./apps/${APP_NAME}/dist/
+COPY --from=builder /app/apps/${APP_NAME}/prisma/ ./apps/${APP_NAME}/prisma/ 2>/dev/null || true
+
+# Install production deps only
+RUN pnpm install --frozen-lockfile --prod
+
+# Rebuild Prisma client in runtime image (needs native binary for Linux)
+WORKDIR /app/apps/${APP_NAME}
+RUN test -f prisma/schema.prisma && npx prisma generate --schema=prisma/schema.prisma || true
+
+EXPOSE ${APP_PORT}
+
+CMD ["node", "dist/main"]

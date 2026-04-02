@@ -1,0 +1,147 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+    branches: [main]
+
+# Cancel in-flight CI runs for the same ref on new pushes
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  # ────────────────────────────────────────────────────────────
+  # Shared packages must be built before any service job
+  # ────────────────────────────────────────────────────────────
+  packages:
+    name: Shared packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @dde/contracts build
+      - run: pnpm --filter @dde/config build
+      - run: pnpm --filter @dde/events build
+
+  # ────────────────────────────────────────────────────────────
+  # API Gateway — build + full test suite
+  # ────────────────────────────────────────────────────────────
+  gateway:
+    name: API Gateway
+    needs: packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @dde/contracts build
+      - run: pnpm --filter @dde/config build
+      - run: pnpm --filter @dde/api-gateway build
+      - run: pnpm test:gateway:all
+
+  # ────────────────────────────────────────────────────────────
+  # Auth Service — build + test
+  # ────────────────────────────────────────────────────────────
+  auth:
+    name: Auth Service
+    needs: packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @dde/contracts build
+      - run: pnpm --filter @dde/config build
+      - run: pnpm --filter @dde/events build
+      - run: pnpm --filter @dde/auth-service build
+      - run: pnpm --filter @dde/auth-service test
+
+  # ────────────────────────────────────────────────────────────
+  # Cycle Service — build
+  # ────────────────────────────────────────────────────────────
+  cycle:
+    name: Cycle Service
+    needs: packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @dde/contracts build
+      - run: pnpm --filter @dde/config build
+      - run: pnpm --filter @dde/events build
+      - run: pnpm --filter @dde/cycle-service build
+
+  # ────────────────────────────────────────────────────────────
+  # Catalog Service — build
+  # ────────────────────────────────────────────────────────────
+  catalog:
+    name: Catalog Service
+    needs: packages
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @dde/contracts build
+      - run: pnpm --filter @dde/config build
+      - run: pnpm --filter @dde/events build
+      - run: pnpm --filter @dde/catalog-service build
+
+  # ────────────────────────────────────────────────────────────
+  # Web — typecheck + production build
+  # ────────────────────────────────────────────────────────────
+  web:
+    name: Web (typecheck + build)
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+        with:
+          version: 9
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter @dde/web lint
+      - run: pnpm --filter @dde/web build

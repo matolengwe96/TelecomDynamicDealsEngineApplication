@@ -1,6 +1,46 @@
-version: '3.9'
+# ─────────────────────────────────────────────────────────────────────────────
+# DDE Enterprise — Full Microservices Stack
+#
+# Each service has its own isolated PostgreSQL database (created by
+# infra/postgres/init-databases.sh on first postgres startup).
+#
+# Service ports (internal Docker network):
+#   api-gateway        → 3001  (exposed to host)
+#   auth-service       → 3011
+#   cycle-service      → 3002
+#   catalog-service    → 3003
+#   tradelist-service  → 3004
+#   oem-service        → 3005
+#   headline-service   → 3006
+#   approval-service   → 3007
+#   channel-deals      → 3008
+#   job-service        → 3009
+#   notification       → 3010
+#   audit-service      → 3012
+#   web                → 3000  (exposed to host)
+# ─────────────────────────────────────────────────────────────────────────────
+
+x-nestjs-build: &nestjs-build
+  context: .
+  dockerfile: infra/docker/Dockerfile.nestjs
+
+x-nestjs-base: &nestjs-base
+  restart: unless-stopped
+  depends_on:
+    postgres:
+      condition: service_healthy
+    rabbitmq:
+      condition: service_healthy
+
+x-db-env: &db-env
+  POSTGRES_HOST: postgres
+  POSTGRES_PORT: 5432
+  POSTGRES_USER: ${POSTGRES_USER:-dde_user}
+  POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dde_pass}
 
 services:
+  # ── Infrastructure ──────────────────────────────────────────────────────────
+
   postgres:
     image: postgres:16-alpine
     container_name: dde_postgres
@@ -8,13 +48,14 @@ services:
     environment:
       POSTGRES_USER: ${POSTGRES_USER:-dde_user}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-dde_pass}
-      POSTGRES_DB: ${POSTGRES_DB:-dde_db}
+      POSTGRES_DB: postgres
     ports:
       - '5432:5432'
     volumes:
       - postgres_data:/var/lib/postgresql/data
+      - ./infra/postgres/init-databases.sh:/docker-entrypoint-initdb.d/init-databases.sh:ro
     healthcheck:
-      test: ['CMD-SHELL', 'pg_isready -U $${POSTGRES_USER:-dde_user}']
+      test: ['CMD-SHELL', 'pg_isready -U ${POSTGRES_USER:-dde_user}']
       interval: 10s
       timeout: 5s
       retries: 5
@@ -33,6 +74,242 @@ services:
       timeout: 5s
       retries: 5
 
+  rabbitmq:
+    image: rabbitmq:3.13-management-alpine
+    container_name: dde_rabbitmq
+    restart: unless-stopped
+    environment:
+      RABBITMQ_DEFAULT_USER: ${RABBITMQ_USER:-dde_user}
+      RABBITMQ_DEFAULT_PASS: ${RABBITMQ_PASS:-dde_pass}
+      RABBITMQ_DEFAULT_VHOST: dde
+    ports:
+      - '5672:5672'
+      - '15672:15672'   # Management UI → http://localhost:15672
+    volumes:
+      - rabbitmq_data:/var/lib/rabbitmq
+    healthcheck:
+      test: ['CMD', 'rabbitmq-diagnostics', 'ping']
+      interval: 15s
+      timeout: 10s
+      retries: 5
+
+  # ── Auth Service ─────────────────────────────────────────────────────────────
+
+  auth-service:
+    <<: *nestjs-base
+    build:
+      <<: *nestjs-build
+      args:
+        APP_NAME: auth-service
+        APP_PORT: 3011
+    container_name: dde_auth
+    environment:
+      <<: *db-env
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3011
+      DATABASE_URL: postgresql://${POSTGRES_USER:-dde_user}:${POSTGRES_PASSWORD:-dde_pass}@postgres:5432/dde_auth
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-dde_user}:${RABBITMQ_PASS:-dde_pass}@rabbitmq:5672/dde
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh-in-production}
+      JWT_ACCESS_EXPIRES_IN: ${JWT_ACCESS_EXPIRES_IN:-15m}
+      JWT_REFRESH_EXPIRES_IN: ${JWT_REFRESH_EXPIRES_IN:-7d}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-internal-dev-secret}
+
+  # ── Cycle Service ─────────────────────────────────────────────────────────────
+
+  cycle-service:
+    <<: *nestjs-base
+    build:
+      <<: *nestjs-build
+      args:
+        APP_NAME: cycle-service
+        APP_PORT: 3002
+    container_name: dde_cycle
+    environment:
+      <<: *db-env
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3002
+      CYCLE_DB_URL: postgresql://${POSTGRES_USER:-dde_user}:${POSTGRES_PASSWORD:-dde_pass}@postgres:5432/dde_cycle
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-dde_user}:${RABBITMQ_PASS:-dde_pass}@rabbitmq:5672/dde
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-internal-dev-secret}
+
+  # ── Catalog Service ───────────────────────────────────────────────────────────
+
+  catalog-service:
+    <<: *nestjs-base
+    build:
+      <<: *nestjs-build
+      args:
+        APP_NAME: catalog-service
+        APP_PORT: 3003
+    container_name: dde_catalog
+    environment:
+      <<: *db-env
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3003
+      CATALOG_DB_URL: postgresql://${POSTGRES_USER:-dde_user}:${POSTGRES_PASSWORD:-dde_pass}@postgres:5432/dde_catalog
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-dde_user}:${RABBITMQ_PASS:-dde_pass}@rabbitmq:5672/dde
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-internal-dev-secret}
+
+  # ── Trade List Service ────────────────────────────────────────────────────────
+
+  tradelist-service:
+    <<: *nestjs-base
+    build:
+      <<: *nestjs-build
+      args:
+        APP_NAME: tradelist-service
+        APP_PORT: 3004
+    container_name: dde_tradelist
+    environment:
+      <<: *db-env
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3004
+      TRADELIST_DB_URL: postgresql://${POSTGRES_USER:-dde_user}:${POSTGRES_PASSWORD:-dde_pass}@postgres:5432/dde_tradelist
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-dde_user}:${RABBITMQ_PASS:-dde_pass}@rabbitmq:5672/dde
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-internal-dev-secret}
+
+  # ── OEM Negotiation Service ───────────────────────────────────────────────────
+
+  oem-negotiation-service:
+    <<: *nestjs-base
+    build:
+      <<: *nestjs-build
+      args:
+        APP_NAME: oem-negotiation-service
+        APP_PORT: 3005
+    container_name: dde_oem
+    environment:
+      <<: *db-env
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3005
+      OEM_DB_URL: postgresql://${POSTGRES_USER:-dde_user}:${POSTGRES_PASSWORD:-dde_pass}@postgres:5432/dde_oem
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-dde_user}:${RABBITMQ_PASS:-dde_pass}@rabbitmq:5672/dde
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-internal-dev-secret}
+
+  # ── Headline Service ──────────────────────────────────────────────────────────
+
+  headline-service:
+    <<: *nestjs-base
+    build:
+      <<: *nestjs-build
+      args:
+        APP_NAME: headline-service
+        APP_PORT: 3006
+    container_name: dde_headline
+    environment:
+      <<: *db-env
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3006
+      HEADLINE_DB_URL: postgresql://${POSTGRES_USER:-dde_user}:${POSTGRES_PASSWORD:-dde_pass}@postgres:5432/dde_headline
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-dde_user}:${RABBITMQ_PASS:-dde_pass}@rabbitmq:5672/dde
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-internal-dev-secret}
+
+  # ── Approval Service ──────────────────────────────────────────────────────────
+
+  approval-service:
+    <<: *nestjs-base
+    build:
+      <<: *nestjs-build
+      args:
+        APP_NAME: approval-service
+        APP_PORT: 3007
+    container_name: dde_approval
+    environment:
+      <<: *db-env
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3007
+      APPROVAL_DB_URL: postgresql://${POSTGRES_USER:-dde_user}:${POSTGRES_PASSWORD:-dde_pass}@postgres:5432/dde_approval
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-dde_user}:${RABBITMQ_PASS:-dde_pass}@rabbitmq:5672/dde
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-internal-dev-secret}
+
+  # ── Channel Deals Service ─────────────────────────────────────────────────────
+
+  channel-deals-service:
+    <<: *nestjs-base
+    build:
+      <<: *nestjs-build
+      args:
+        APP_NAME: channel-deals-service
+        APP_PORT: 3008
+    container_name: dde_channel_deals
+    environment:
+      <<: *db-env
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3008
+      CHANNEL_DEALS_DB_URL: postgresql://${POSTGRES_USER:-dde_user}:${POSTGRES_PASSWORD:-dde_pass}@postgres:5432/dde_channel_deals
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-dde_user}:${RABBITMQ_PASS:-dde_pass}@rabbitmq:5672/dde
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-internal-dev-secret}
+
+  # ── Job Service ───────────────────────────────────────────────────────────────
+
+  job-service:
+    <<: *nestjs-base
+    build:
+      <<: *nestjs-build
+      args:
+        APP_NAME: job-service
+        APP_PORT: 3009
+    container_name: dde_job
+    environment:
+      <<: *db-env
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3009
+      JOB_DB_URL: postgresql://${POSTGRES_USER:-dde_user}:${POSTGRES_PASSWORD:-dde_pass}@postgres:5432/dde_job
+      REDIS_URL: redis://redis:6379
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-dde_user}:${RABBITMQ_PASS:-dde_pass}@rabbitmq:5672/dde
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-internal-dev-secret}
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+      rabbitmq:
+        condition: service_healthy
+
+  # ── Notification Service ──────────────────────────────────────────────────────
+
+  notification-service:
+    <<: *nestjs-base
+    build:
+      <<: *nestjs-build
+      args:
+        APP_NAME: notification-service
+        APP_PORT: 3010
+    container_name: dde_notification
+    environment:
+      <<: *db-env
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3010
+      NOTIFICATION_DB_URL: postgresql://${POSTGRES_USER:-dde_user}:${POSTGRES_PASSWORD:-dde_pass}@postgres:5432/dde_notification
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-dde_user}:${RABBITMQ_PASS:-dde_pass}@rabbitmq:5672/dde
+      SMTP_HOST: ${SMTP_HOST:-}
+      SMTP_PORT: ${SMTP_PORT:-587}
+      SMTP_USER: ${SMTP_USER:-}
+      SMTP_PASS: ${SMTP_PASS:-}
+      SMTP_FROM: ${SMTP_FROM:-noreply@dde.local}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-internal-dev-secret}
+
+  # ── Audit Service ─────────────────────────────────────────────────────────────
+
+  audit-service:
+    <<: *nestjs-base
+    build:
+      <<: *nestjs-build
+      args:
+        APP_NAME: audit-service
+        APP_PORT: 3012
+    container_name: dde_audit
+    environment:
+      <<: *db-env
+      NODE_ENV: ${NODE_ENV:-production}
+      PORT: 3012
+      AUDIT_DB_URL: postgresql://${POSTGRES_USER:-dde_user}:${POSTGRES_PASSWORD:-dde_pass}@postgres:5432/dde_audit
+      RABBITMQ_URL: amqp://${RABBITMQ_USER:-dde_user}:${RABBITMQ_PASS:-dde_pass}@rabbitmq:5672/dde
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-internal-dev-secret}
+
+  # ── API Gateway ───────────────────────────────────────────────────────────────
+
   api-gateway:
     build:
       context: .
@@ -40,19 +317,33 @@ services:
     container_name: dde_api_gateway
     restart: unless-stopped
     depends_on:
-      postgres:
-        condition: service_healthy
-      redis:
-        condition: service_healthy
+      auth-service:
+        condition: service_started
+      cycle-service:
+        condition: service_started
+      catalog-service:
+        condition: service_started
     environment:
-      NODE_ENV: ${NODE_ENV:-development}
-      DATABASE_URL: postgres://${POSTGRES_USER:-dde_user}:${POSTGRES_PASSWORD:-dde_pass}@postgres:5432/${POSTGRES_DB:-dde_db}
-      REDIS_URL: redis://redis:6379
-      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
-      JWT_REFRESH_SECRET: ${JWT_REFRESH_SECRET:-change-me-refresh-in-production}
+      NODE_ENV: ${NODE_ENV:-production}
       PORT: 3001
+      JWT_SECRET: ${JWT_SECRET:-change-me-in-production}
+      INTERNAL_SERVICE_SECRET: ${INTERNAL_SERVICE_SECRET:-internal-dev-secret}
+      # ── Downstream service URLs (internal Docker DNS) ──────────────────────
+      AUTH_SERVICE_URL: http://auth-service:3011
+      CYCLE_SERVICE_URL: http://cycle-service:3002
+      CATALOG_SERVICE_URL: http://catalog-service:3003
+      TRADELIST_SERVICE_URL: http://tradelist-service:3004
+      OEM_SERVICE_URL: http://oem-negotiation-service:3005
+      HEADLINE_SERVICE_URL: http://headline-service:3006
+      APPROVAL_SERVICE_URL: http://approval-service:3007
+      CHANNEL_DEALS_SERVICE_URL: http://channel-deals-service:3008
+      JOB_SERVICE_URL: http://job-service:3009
+      NOTIFICATION_SERVICE_URL: http://notification-service:3010
+      AUDIT_SERVICE_URL: http://audit-service:3012
     ports:
       - '3001:3001'
+
+  # ── Web Frontend ──────────────────────────────────────────────────────────────
 
   web:
     build:
@@ -70,3 +361,4 @@ services:
 volumes:
   postgres_data:
   redis_data:
+  rabbitmq_data:
