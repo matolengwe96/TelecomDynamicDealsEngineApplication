@@ -36,7 +36,7 @@ Documentation/  Business docs, process flows, DB design
 
 - Node.js >= 20
 - pnpm >= 9
-- Docker + Docker Compose
+- Docker + Docker Compose v2
 
 ### 1. Install dependencies
 
@@ -54,7 +54,17 @@ cp .env.example .env
 ### 3. Start infrastructure (PostgreSQL + Redis)
 
 ```bash
-docker-compose up -d postgres redis
+docker compose up -d postgres redis
+```
+
+### 3.1 Verify API Gateway tests (recommended)
+
+```bash
+# Gateway E2E suite
+pnpm test:gateway:e2e
+
+# Gateway unit + E2E bundle
+pnpm test:gateway:all
 ```
 
 ### 4. Run database migrations
@@ -166,10 +176,10 @@ pnpm dev:local:auth-gateway:smoke
 ## Documentation
 
 - [Architecture Overview](docs/architecture/overview.md)
-- [Database Schema](docs/database/schema-overview.md)
-- [Deal Cycle Workflow](docs/workflows/deal-cycle.md)
-- [Approval Workflow](docs/workflows/approvals.md)
-- [Headlines Workflow](docs/workflows/headlines.md)
+- [Service Map](docs/architecture/service-map.md)
+- [Database Ownership](docs/database/ownership.md)
+- [Event Catalogue](docs/events/event-catalogue.md)
+- [Runtime Handoff](docs/handoff/runtime-handoff-2026-04-02.md)
 
 ## Implementation Roadmap
 
