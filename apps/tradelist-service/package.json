@@ -19,7 +19,7 @@
     "@nestjs/config": "^3.2.3",
     "@nestjs/microservices": "^10.3.10",
     "@nestjs/platform-express": "^10.3.10",
-    "@nestjs/swagger": "^7.4.0",
+    "@nestjs/swagger": "^11.2.6",
     "@nestjs/throttler": "^6.2.1",
     "@prisma/client": "^5.17.0",
     "amqplib": "^0.10.4",
