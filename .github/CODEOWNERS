@@ -1,0 +1,12 @@
+# Default ownership
+* @matolengwe96
+
+# Core platform ownership
+/apps/api-gateway/ @matolengwe96
+/apps/auth-service/ @matolengwe96
+/apps/cycle-service/ @matolengwe96
+/apps/catalog-service/ @matolengwe96
+/apps/web/ @matolengwe96
+/packages/ @matolengwe96
+/infra/ @matolengwe96
+/docs/ @matolengwe96

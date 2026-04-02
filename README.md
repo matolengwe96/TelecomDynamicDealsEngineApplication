@@ -177,9 +177,15 @@ pnpm dev:local:auth-gateway:smoke
 
 - [Architecture Overview](docs/architecture/overview.md)
 - [Service Map](docs/architecture/service-map.md)
+- [Enterprise Readiness Baseline](docs/architecture/enterprise-readiness.md)
 - [Database Ownership](docs/database/ownership.md)
 - [Event Catalogue](docs/events/event-catalogue.md)
 - [Runtime Handoff](docs/handoff/runtime-handoff-2026-04-02.md)
+
+## Engineering Governance
+
+- [Contributing Guide](CONTRIBUTING.md)
+- [Security Policy](SECURITY.md)
 
 ## Implementation Roadmap
 
